@@ -28,9 +28,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_MODEL,
     CONF_HOST,
-    CONF_PASSWORD,
     CONF_URL,
-    CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant, callback, valid_entity_id
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -42,7 +40,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.loader import async_get_integration
 from homeassistant.util import slugify
 
-from .api import FrigateApiClient, FrigateApiClientError
+from .api import create_frigate_api_client, FrigateApiClient, FrigateApiClientError
 from .const import (
     ATTR_CLIENT,
     ATTR_CONFIG,
@@ -199,12 +197,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
-    client = FrigateApiClient(
-        str(entry.data.get(CONF_URL)),
-        async_get_clientsession(hass),
-        entry.data.get(CONF_USERNAME),
-        entry.data.get(CONF_PASSWORD),
-    )
+    client = create_frigate_api_client(async_get_clientsession(hass), entry.data)
     coordinator = FrigateDataUpdateCoordinator(hass, client=client)
     await coordinator.async_config_entry_first_refresh()
 

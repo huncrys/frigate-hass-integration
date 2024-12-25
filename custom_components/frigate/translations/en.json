@@ -6,7 +6,8 @@
         "data": {
           "url": "URL",
           "username": "Username (optional)",
-          "password": "Password (optional)"
+          "password": "Password (optional)",
+          "basic_auth": "Use HTTP basic authentication instead of API authentication"
         }
       }
     },

@@ -15,8 +15,9 @@ from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
-from .api import FrigateApiClient, FrigateApiClientError
+from .api import create_frigate_api_client, FrigateApiClientError
 from .const import (
+    CONF_BASIC_AUTH,
     CONF_ENABLE_WEBRTC,
     CONF_MEDIA_BROWSER_ENABLE,
     CONF_NOTIFICATION_PROXY_ENABLE,
@@ -77,13 +78,7 @@ class FrigateFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             return self._show_config_form(user_input, errors={"base": "invalid_url"})
 
         try:
-            session = async_create_clientsession(self.hass)
-            client = FrigateApiClient(
-                user_input[CONF_URL],
-                session,
-                user_input.get(CONF_USERNAME),
-                user_input.get(CONF_PASSWORD),
-            )
+            client = create_frigate_api_client(async_create_clientsession(self.hass), user_input)
             await client.async_get_stats()
         except FrigateApiClientError:
             return self._show_config_form(user_input, errors={"base": "cannot_connect"})
@@ -127,6 +122,9 @@ class FrigateFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional(
                         CONF_PASSWORD, default=user_input.get(CONF_PASSWORD, "")
                     ): str,
+                    vol.Optional(
+                        CONF_BASIC_AUTH, default=user_input.get(CONF_BASIC_AUTH, False)
+                    ): bool,
                 }
             ),
             errors=errors,

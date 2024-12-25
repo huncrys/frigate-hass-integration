@@ -13,6 +13,13 @@ import async_timeout
 from yarl import URL
 
 from homeassistant.auth import jwt_wrapper
+from homeassistant.const import (
+    CONF_PASSWORD,
+    CONF_URL,
+    CONF_USERNAME,
+)
+
+from .const import CONF_BASIC_AUTH
 
 TIMEOUT = 10
 
@@ -47,6 +54,10 @@ class FrigateApiClient:
         self._username = username
         self._password = password
         self._token_data: dict[str, Any] = {}
+
+    def get_fqdn_path(self, path: str) -> str:
+        """Get the fully qualified domain name path."""
+        return str(URL(self._host) / path)
 
     async def async_get_version(self) -> str:
         """Get data from the API."""
@@ -228,6 +239,37 @@ class FrigateApiClient:
         )
         return cast(dict[str, Any], result) if decode_json else result
 
+    async def async_get_latest_image(
+        self, camera: str, width: int | None = None, height: int | None = None
+    ) -> bytes | None:
+        """Get latest image."""
+        return await self.api_wrapper(
+            "get",
+            str(
+                URL(self._host)
+                / f"api/{camera}/latest.jpg"
+                % ({"h": height} if height is not None and height > 0 else {})
+            ),
+            decode_json=False,
+        )
+
+    async def async_get_webrtc_sdp_offer(
+        self,
+        camera: str,
+        sdp: str,
+    ) -> str | None:
+        """Get WebRTC SDP offer."""
+        result = cast(
+            dict[str, Any],
+            await self.api_wrapper(
+                "post",
+                str(URL(self._host) / "api/go2rtc/webrtc" % ({"src": camera})),
+                {"type": "offer", "sdp": sdp},
+            ),
+        )
+
+        return result["sdp"]
+
     async def _get_token(self) -> None:
         """
         Obtain a new JWT token using the provided username and password.
@@ -367,3 +409,18 @@ class FrigateApiClient:
                 exc,
             )
             raise FrigateApiClientError from exc
+
+
+def create_frigate_api_client(
+    session: aiohttp.ClientSession, config: dict[str, Any]
+) -> FrigateApiClient:
+    """Create a FrigateApiClient."""
+    url = str(config.get(CONF_URL))
+    username = config.get(CONF_USERNAME)
+    password = config.get(CONF_PASSWORD)
+    if config.get(CONF_BASIC_AUTH):
+        url = str(URL(url).with_user(username).with_password(password))
+        username = None
+        password = None
+
+    return FrigateApiClient(url, session, username, password)

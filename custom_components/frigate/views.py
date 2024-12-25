@@ -18,7 +18,6 @@ from hass_web_proxy_lib import (
     WebsocketProxyView,
 )
 import jwt
-from yarl import URL
 
 from custom_components.frigate.api import FrigateApiClient
 from custom_components.frigate.const import (
@@ -34,7 +33,6 @@ from homeassistant.components.http import KEY_AUTHENTICATED
 from homeassistant.components.http.auth import DATA_SIGN_SECRET, SIGN_QUERY_PARAM
 from homeassistant.components.http.const import KEY_HASS
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_URL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -84,6 +82,16 @@ def get_client_for_frigate_instance_id(
 
     config_entry = get_config_entry_for_frigate_instance_id(hass, frigate_instance_id)
     if config_entry:
+        return get_client_for_config_entry(hass, config_entry)
+    return None
+
+
+def get_client_for_config_entry(
+    hass: HomeAssistant, config_entry: ConfigEntry
+) -> FrigateApiClient | None:
+    """Get a client for a given config_entry."""
+
+    if config_entry:
         return cast(
             FrigateApiClient,
             hass.data[DOMAIN].get(config_entry.entry_id, {}).get(ATTR_CLIENT),
@@ -132,16 +140,29 @@ class FrigateProxyViewMixin:
             return get_config_entry_for_frigate_instance_id(hass, frigate_instance_id)
         return get_default_config_entry(hass)
 
+    def _get_client_for_request(
+        self, request: web.Request, frigate_instance_id: str | None = None
+    ) -> FrigateApiClient | None:
+        """Get a FrigateApiClient for a given request."""
+        hass = request.app[KEY_HASS]
+
+        config_entry = self._get_config_entry_for_request(request, frigate_instance_id)
+
+        if config_entry:
+            return get_client_for_config_entry(hass, config_entry)
+        return None
+
     def _get_fqdn_path(
         self, request: web.Request, path: str, frigate_instance_id: str | None = None
     ) -> str:
         """Get the fully qualified domain name path."""
-        config_entry = self._get_config_entry_for_request(
+        client = self._get_client_for_request(
             request, frigate_instance_id=frigate_instance_id
         )
-        if not config_entry:
+        if not client:
             raise HASSWebProxyLibNotFoundRequestError()
-        return str(URL(config_entry.data[CONF_URL]) / path)
+
+        return client.get_fqdn_path(path)
 
 
 class FrigateProxyView(FrigateProxyViewMixin, ProxyView):

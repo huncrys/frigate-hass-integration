@@ -23,7 +23,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_URL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -283,17 +282,8 @@ class FrigateCamera(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
         """Return bytes of camera image."""
-        websession = async_get_clientsession(self.hass)
-
-        image_url = str(
-            URL(self._url)
-            / f"api/{self._cam_name}/latest.jpg"
-            % ({"h": height} if height is not None and height > 0 else {})
-        )
-
         async with async_timeout.timeout(10):
-            response = await websession.get(image_url)
-            return await response.read()
+            return await self._client.async_get_latest_image(self._cam_name, height)
 
     async def stream_source(self) -> str | None:
         """Return the source of the stream."""
@@ -416,17 +406,9 @@ class BirdseyeCamera(FrigateEntity, Camera):
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
         """Return bytes of camera image."""
-        websession = async_get_clientsession(self.hass)
-
-        image_url = str(
-            URL(self._url)
-            / f"api/{self._cam_name}/latest.jpg"
-            % ({"h": height} if height is not None and height > 0 else {})
-        )
 
         async with async_timeout.timeout(10):
-            response = await websession.get(image_url)
-            return await response.read()
+            return await self._client.async_get_latest_image(self._cam_name, height)
 
     async def stream_source(self) -> str | None:
         """Return the source of the stream."""
@@ -440,12 +422,11 @@ class FrigateCameraWebRTC(FrigateCamera):
         self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
     ) -> None:
         """Handle the WebRTC offer and return an answer."""
-        websession = async_get_clientsession(self.hass)
-        url = f"{self._url}/api/go2rtc/webrtc?src={self._cam_name}"
-        payload = {"type": "offer", "sdp": offer_sdp}
-        async with websession.post(url, json=payload) as resp:
-            answer = await resp.json()
-            send_message(WebRTCAnswer(answer["sdp"]))
+        send_message(
+            WebRTCAnswer(
+                await self._client.async_get_webrtc_sdp_offer(self._cam_name, offer_sdp)
+            )
+        )
 
     async def async_on_webrtc_candidate(self, session_id: str, candidate: Any) -> None:
         """Ignore WebRTC candidates for Frigate cameras."""
@@ -459,12 +440,11 @@ class BirdseyeCameraWebRTC(BirdseyeCamera):
         self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
     ) -> None:
         """Handle the WebRTC offer and return an answer."""
-        websession = async_get_clientsession(self.hass)
-        url = f"{self._url}/api/go2rtc/webrtc?src={self._cam_name}"
-        payload = {"type": "offer", "sdp": offer_sdp}
-        async with websession.post(url, json=payload) as resp:
-            answer = await resp.json()
-            send_message(WebRTCAnswer(answer["sdp"]))
+        send_message(
+            WebRTCAnswer(
+                await self._client.async_get_webrtc_sdp_offer(self._cam_name, offer_sdp)
+            )
+        )
 
     async def async_on_webrtc_candidate(self, session_id: str, candidate: Any) -> None:
         """Ignore WebRTC candidates for Frigate cameras."""
